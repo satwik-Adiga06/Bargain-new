@@ -1,0 +1,7 @@
+{
+  "name": "BargainBot Live",
+  "description": "A real-time voice-based bargaining chatbot where users negotiate prices for items with a persona-driven AI. Features a developer takeover mode for human-in-the-loop interventions.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
