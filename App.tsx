@@ -30,12 +30,15 @@ const App: React.FC = () => {
   // Auto-scroll Ledger
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      scrollRef.current.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
     }
   }, [messages, currentInputText, currentOutputText]);
 
   const toggleProduct = (id: string) => {
-    setSelectedIds(prev => 
+    setSelectedIds(prev =>
       prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
     );
   };
@@ -52,11 +55,12 @@ const App: React.FC = () => {
 
     try {
       // Create fresh instance for updated API key access
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      
+      const ai = new GoogleGenAI({ apiKey: "AIzaSyDBWeHx3-7CWoG9Df7SUTrkbWU8c0it7qM" });
+
+
       inputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       outputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-      
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
       const sessionPromise = ai.live.connect({
@@ -66,7 +70,7 @@ const App: React.FC = () => {
             console.log('Voice link established');
             const source = inputAudioContextRef.current!.createMediaStreamSource(stream);
             const scriptProcessor = inputAudioContextRef.current!.createScriptProcessor(4096, 1, 1);
-            
+
             scriptProcessor.onaudioprocess = (e) => {
               if (isMuted) return;
               const inputData = e.inputBuffer.getChannelData(0);
@@ -95,21 +99,33 @@ const App: React.FC = () => {
               sourcesRef.current.add(source);
             }
 
-            // STT/TTS Transcription Handling
+            // 2. Real-time Transcription
             if (msg.serverContent?.outputTranscription) {
               setCurrentOutputText(prev => prev + msg.serverContent!.outputTranscription!.text);
             } else if (msg.serverContent?.inputTranscription) {
               setCurrentInputText(prev => prev + msg.serverContent!.inputTranscription!.text);
             }
 
-            // Flush temporary text into history on turn completion
+            // 3. FIX: Turn Completion (Moves text to permanent WhatsApp list)
             if (msg.serverContent?.turnComplete) {
+              // Use the values directly from the state variables at this moment
               setMessages(prev => {
-                const updated = [...prev];
-                if (currentInputText) updated.push({ role: 'user', text: currentInputText, timestamp: Date.now() });
-                if (currentOutputText) updated.push({ role: 'model', text: currentOutputText, timestamp: Date.now() });
-                return updated;
+                const newHistory = [...prev];
+
+                // If there's user text, add it as a permanent bubble
+                if (currentInputText.trim()) {
+                  newHistory.push({ role: 'user', text: currentInputText, timestamp: Date.now() });
+                }
+
+                // If there's bot text, add it as a permanent bubble
+                if (currentOutputText.trim()) {
+                  newHistory.push({ role: 'model', text: currentOutputText, timestamp: Date.now() });
+                }
+
+                return newHistory;
               });
+
+              // CRITICAL: Clear the "Live" text so it doesn't stay stuck in the processing box
               setCurrentInputText('');
               setCurrentOutputText('');
             }
@@ -187,15 +203,14 @@ const App: React.FC = () => {
 
         {appState === AppState.NEGOTIATING && (
           <div className="flex items-center gap-4">
-            <button 
+            <button
               onClick={() => setIsAdminMode(!isAdminMode)}
-              className={`px-5 py-2 rounded-full text-[10px] font-black tracking-widest transition-all border ${
-                isAdminMode ? 'bg-red-600 border-red-500 text-white shadow-[0_0_20px_rgba(220,38,38,0.3)]' : 'bg-slate-900 border-slate-700 text-slate-500 hover:text-slate-300'
-              }`}
+              className={`px-5 py-2 rounded-full text-[10px] font-black tracking-widest transition-all border ${isAdminMode ? 'bg-red-600 border-red-500 text-white shadow-[0_0_20px_rgba(220,38,38,0.3)]' : 'bg-slate-900 border-slate-700 text-slate-500 hover:text-slate-300'
+                }`}
             >
               {isAdminMode ? 'TAKEOVER ACTIVE' : 'DEV ACCESS'}
             </button>
-            <button 
+            <button
               onClick={endSession}
               className="px-6 py-2 bg-slate-100 hover:bg-white text-slate-950 rounded-full text-xs font-black transition-all shadow-xl active:scale-95"
             >
@@ -212,12 +227,12 @@ const App: React.FC = () => {
               <h2 className="text-5xl font-black mb-4 text-slate-50 tracking-tight leading-tight">Secure the Inventory</h2>
               <p className="text-slate-400 text-lg max-w-2xl mx-auto">Negotiate for the rarest items in the sector. Fenrir is waiting for your first mistake.</p>
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
               {PRODUCTS.map(product => (
-                <ProductCard 
-                  key={product.id} 
-                  product={product} 
+                <ProductCard
+                  key={product.id}
+                  product={product}
                   isSelected={selectedIds.includes(product.id)}
                   onToggle={toggleProduct}
                 />
@@ -244,7 +259,7 @@ const App: React.FC = () => {
 
         {appState === AppState.NEGOTIATING && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1 animate-in fade-in zoom-in-95 duration-500">
-            
+
             {/* Sidebar Stats */}
             <div className="lg:col-span-4 space-y-6">
               <div className="bg-slate-900/40 border border-slate-800 rounded-3xl p-6 backdrop-blur-xl shadow-2xl relative overflow-hidden group">
@@ -261,7 +276,7 @@ const App: React.FC = () => {
                       </div>
                       <div className="flex-1">
                         <p className="font-bold text-slate-200 text-xs tracking-tight">{p.name}</p>
-                        <p className="text-[10px] font-mono text-slate-500 mt-0.5">${p.price} MRSP</p>
+                        <p className="text-[10px] font-mono text-slate-500 mt-0.5">₹{p.price} MRSP</p>
                       </div>
                     </div>
                   ))}
@@ -270,7 +285,7 @@ const App: React.FC = () => {
                   <div className="flex justify-between items-end">
                     <span className="text-slate-500 text-[9px] font-black uppercase tracking-widest">Total Valuation</span>
                     <span className="text-3xl font-black text-white font-mono tracking-tighter shadow-cyan-500/20">
-                      ${selectedProducts.reduce((acc, p) => acc + p.price, 0)}
+                      ₹{selectedProducts.reduce((acc, p) => acc + p.price, 0)}
                     </span>
                   </div>
                   <div className="bg-slate-950/80 rounded-xl p-3 border border-slate-800/50">
@@ -279,7 +294,7 @@ const App: React.FC = () => {
                       <span className="text-cyan-500 font-mono">70% MIN</span>
                     </div>
                     <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                      <div className="bg-cyan-500 h-full w-[70%]" style={{boxShadow: '0 0 10px #06b6d4'}}></div>
+                      <div className="bg-cyan-500 h-full w-[70%]" style={{ boxShadow: '0 0 10px #06b6d4' }}></div>
                     </div>
                   </div>
                 </div>
@@ -308,35 +323,32 @@ const App: React.FC = () => {
                   {/* Voice Interface */}
                   <div className="bg-slate-900/40 rounded-[2rem] border border-slate-800 p-10 flex flex-col items-center justify-center relative overflow-hidden shadow-2xl">
                     <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-cyan-500 to-transparent opacity-30"></div>
-                    
+
                     <div className="relative group">
-                      <div className={`absolute inset-0 blur-[60px] rounded-full transition-all duration-1000 ${
-                        isMuted ? 'bg-red-500/5 opacity-0' : 'bg-cyan-500/10 opacity-40 animate-pulse'
-                      }`}></div>
-                      <div className={`relative w-56 h-56 rounded-full border-2 flex flex-col items-center justify-center bg-slate-950 transition-all duration-700 ${
-                        isMuted 
-                          ? 'border-slate-800 opacity-40 grayscale scale-90' 
-                          : 'border-cyan-500 shadow-[0_0_100px_rgba(6,182,212,0.15)] ring-1 ring-cyan-500/20'
-                      }`}>
+                      <div className={`absolute inset-0 blur-[60px] rounded-full transition-all duration-1000 ${isMuted ? 'bg-red-500/5 opacity-0' : 'bg-cyan-500/10 opacity-40 animate-pulse'
+                        }`}></div>
+                      <div className={`relative w-56 h-56 rounded-full border-2 flex flex-col items-center justify-center bg-slate-950 transition-all duration-700 ${isMuted
+                        ? 'border-slate-800 opacity-40 grayscale scale-90'
+                        : 'border-cyan-500 shadow-[0_0_100px_rgba(6,182,212,0.15)] ring-1 ring-cyan-500/20'
+                        }`}>
                         <div className={`transition-all duration-500 ${!isMuted ? 'scale-110' : ''}`}>
                           <svg xmlns="http://www.w3.org/2000/svg" className={`h-24 w-24 ${isMuted ? 'text-slate-700' : 'text-cyan-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                           </svg>
                         </div>
                         <div className="mt-4 flex gap-1 h-4 items-center">
-                          {!isMuted && [1,2,3,4,5].map(i => (
-                            <div key={i} className="w-1 bg-cyan-500 rounded-full animate-bounce" style={{height: `${Math.random() * 100}%`, animationDelay: `${i*0.1}s`}}></div>
+                          {!isMuted && [1, 2, 3, 4, 5].map(i => (
+                            <div key={i} className="w-1 bg-cyan-500 rounded-full animate-bounce" style={{ height: `${Math.random() * 100}%`, animationDelay: `${i * 0.1}s` }}></div>
                           ))}
                         </div>
                       </div>
                     </div>
 
                     <div className="mt-12 flex flex-col items-center gap-6">
-                      <button 
+                      <button
                         onClick={() => setIsMuted(!isMuted)}
-                        className={`group px-12 py-4 rounded-2xl flex items-center gap-4 transition-all border-2 ${
-                          isMuted ? 'bg-red-500/10 text-red-500 border-red-500/30' : 'bg-slate-900 hover:bg-slate-800 text-slate-100 border-slate-700 shadow-xl'
-                        }`}
+                        className={`group px-12 py-4 rounded-2xl flex items-center gap-4 transition-all border-2 ${isMuted ? 'bg-red-500/10 text-red-500 border-red-500/30' : 'bg-slate-900 hover:bg-slate-800 text-slate-100 border-slate-700 shadow-xl'
+                          }`}
                       >
                         <div className={`w-3 h-3 rounded-full ${isMuted ? 'bg-red-500 shadow-[0_0_10px_#ef4444]' : 'bg-cyan-400 animate-pulse shadow-[0_0_10px_#22d3ee]'}`}></div>
                         <span className="text-xs font-black tracking-[0.4em] uppercase">{isMuted ? 'Link Muted' : 'Link Active'}</span>
@@ -345,67 +357,38 @@ const App: React.FC = () => {
                   </div>
 
                   {/* Ledger / Transcription */}
-                  <div className="bg-slate-950 border border-slate-800 rounded-[2rem] p-8 flex flex-col h-[450px] shadow-2xl relative">
-                    <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-800/50">
-                      <h3 className="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-3">
-                        <div className="w-2 h-2 bg-cyan-500 rounded-full shadow-[0_0_8px_#06b6d4]"></div>
-                        Bazaar Interaction Ledger
-                      </h3>
-                      <div className="flex gap-4">
-                         <div className="text-[9px] font-mono text-slate-600 bg-slate-900 px-2 py-1 rounded">STREAMING_STT</div>
-                         <div className="text-[9px] font-mono text-slate-600 bg-slate-900 px-2 py-1 rounded">BUFFER_OK</div>
-                      </div>
+                  <div className="flex flex-col h-[500px] bg-slate-950 rounded-[2rem] border border-slate-800 shadow-2xl overflow-hidden">
+                    {/* Header */}
+                    <div className="p-4 border-b border-slate-800 bg-slate-900/50 flex justify-between items-center">
+                      <span className="text-[10px] font-black text-cyan-500 tracking-widest">LIVE CONVERSATION LOG</span>
+                      <span className="text-[9px] text-slate-500 font-mono">ENCRYPTED_VOICE_LINK</span>
                     </div>
 
-                    <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-6 pr-4 custom-scrollbar scroll-smooth pb-4">
+                    {/* WhatsApp-Style Message List */}
+                    <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-6 pr-4 custom-scrollbar">
+                      {/* 1. Permanent History (WhatsApp Bubbles) */}
                       {messages.map((m, idx) => (
-                        <div key={idx} className={`animate-in slide-in-from-bottom-4 duration-500 flex ${m.role === 'admin' ? 'justify-center w-full' : m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                          <div className={`max-w-[80%] rounded-[1.5rem] p-5 ${
-                            m.role === 'model' 
-                              ? 'bg-slate-900 border border-slate-800 text-slate-300 rounded-bl-none shadow-lg' 
-                              : m.role === 'admin'
-                                ? 'bg-red-600/5 border border-red-500/20 text-red-400 font-mono text-[11px] italic text-center w-full rounded-xl'
-                                : 'bg-cyan-500/5 border border-cyan-500/20 text-cyan-50 rounded-br-none shadow-[0_0_30px_rgba(6,182,212,0.05)]'
-                          }`}>
-                            <div className="flex items-center gap-3 mb-2 opacity-60">
-                              <span className={`text-[9px] font-black uppercase tracking-widest ${
-                                m.role === 'model' ? 'text-slate-500' : m.role === 'admin' ? 'text-red-500' : 'text-cyan-500'
-                              }`}>
-                                {m.role === 'model' ? 'The Merchant' : m.role === 'admin' ? 'OVERRIDE_SIGNAL' : 'Customer'}
-                              </span>
-                              <div className="h-px flex-1 bg-slate-800/50"></div>
-                            </div>
-                            <p className="text-[13px] leading-relaxed tracking-tight">{m.text}</p>
+                        <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                          <div className={`max-w-[80%] rounded-2xl p-4 ${m.role === 'user' ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-300 border border-slate-700'
+                            }`}>
+                            <p className="text-sm">{m.text}</p>
                           </div>
                         </div>
                       ))}
-                      
+
+                      {/* 2. Live Feedback (Disappears after turn is done) */}
                       {currentInputText && (
-                        <div className="flex justify-end animate-pulse">
-                          <div className="bg-cyan-500/5 border border-dashed border-cyan-500/20 rounded-2xl p-4 max-w-[80%]">
-                            <span className="text-[9px] font-black text-cyan-500 uppercase block mb-2">Processing Voice...</span>
-                            <p className="text-[13px] text-cyan-200">{currentInputText}</p>
+                        <div className="flex justify-end opacity-70">
+                          <div className="bg-cyan-900/30 border border-dashed border-cyan-500/50 p-3 rounded-xl">
+                            <p className="text-xs italic text-cyan-200">{currentInputText}</p>
                           </div>
                         </div>
                       )}
-
                       {currentOutputText && (
-                        <div className="flex justify-start animate-pulse">
-                          <div className="bg-slate-900/50 border border-dashed border-slate-800 rounded-2xl p-4 max-w-[80%]">
-                            <span className="text-[9px] font-black text-slate-500 uppercase block mb-2">Fenrir Speaking...</span>
-                            <p className="text-[13px] text-slate-400">{currentOutputText}</p>
+                        <div className="flex justify-start opacity-70">
+                          <div className="bg-slate-800/50 border border-dashed border-slate-600 p-3 rounded-xl">
+                            <p className="text-xs italic text-slate-400">{currentOutputText}</p>
                           </div>
-                        </div>
-                      )}
-
-                      {messages.length === 0 && !currentInputText && !currentOutputText && (
-                        <div className="h-full flex flex-col items-center justify-center text-slate-800 text-center p-12">
-                          <div className="w-16 h-16 border-2 border-slate-900 rounded-full flex items-center justify-center mb-6 opacity-40">
-                             <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                             </svg>
-                          </div>
-                          <p className="text-[10px] font-mono uppercase tracking-[0.3em] opacity-40">Awaiting Signal Verification</p>
                         </div>
                       )}
                     </div>
@@ -417,9 +400,9 @@ const App: React.FC = () => {
         )}
       </main>
 
-      <AdminPanel 
-        isActive={isAdminMode} 
-        onSendAdminMessage={injectAdminMessage} 
+      <AdminPanel
+        isActive={isAdminMode}
+        onSendAdminMessage={injectAdminMessage}
       />
 
       <footer className="mt-12 text-center text-slate-700 text-[10px] font-mono uppercase tracking-widest pb-4 opacity-50">
